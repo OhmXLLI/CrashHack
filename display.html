@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Neon</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-blue: #00ffff;
+            --neon-green: #39ff14;
+            --dark-bg: #0a0a0a;
+            --panel-bg: rgba(20, 20, 30, 0.9);
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-color: var(--dark-bg);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            color: #fff;
+        }
+
+        .display {
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 15px;
+            width: 350px;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.3),
+                        inset 0 0 15px rgba(255, 0, 255, 0.2);
+            border: 1px solid var(--neon-pink);
+            animation: glow 2s infinite alternate;
+        }
+
+        .data {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255, 0, 255, 0.1);
+        }
+
+        .data span {
+            color: var(--neon-white);
+            text-shadow: 0 0 5px var(--neon-pink);
+            font-weight: 500;
+        }
+
+        #controls {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 20px;
+            background: var(--panel-bg);
+            border-radius: 15px;
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+        }
+
+        button {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            padding: 12px 24px;
+            border: 1px solid var(--neon-green);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--neon-green);
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px var(--neon-green);
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.3),
+                        inset 0 0 5px rgba(57, 255, 20, 0.2);
+        }
+
+        button:hover {
+            background: var(--neon-green);
+            color: var(--dark-bg);
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.5);
+        }
+
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .success {
+            background: rgba(57, 255, 20, 0.2);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid #ff0000;
+            color: #ff0000;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 15px rgba(255, 0, 255, 0.3); }
+            100% { box-shadow: 0 0 25px rgba(255, 0, 255, 0.5); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="display">
+        <div class="data">Jogo: <span id="jogo">---</span></div>
+        <div class="data">Multiplicador: <span id="multiplicador">---</span></div>
+        <div class="data">Percentual: <span id="percentual">---</span></div>
+        <div class="data">Média Móvel: <span id="media_movel">---</span></div>
+        <div class="data">Zona: <span id="zona">---</span></div>
+        <div class="data">Force: <span id="rsi">---</span></div>
+        <div class="data">Maior Perda Consecutiva: <span id="maior_perda">---</span></div>
+        <div class="data">Maior Ganho Consecutivo: <span id="maior_ganho">---</span></div>
+        <div class="data">Timer: <span id="timestamp">---</span></div>
+    </div>
+
+    <div id="controls">
+        <button onclick="sendCommand('pause')">Pausar</button>
+        <button onclick="sendCommand('resume')">Retomar</button>
+        <button onclick="sendCommand('accelerate')">Acelerar</button>
+        <button onclick="sendCommand('decelerate')">Desacelerar</button>
+        <button onclick="sendCommand('stop')">Parar</button>
+        <button onclick="navigateMultiplicator('prev')">Anterior</button>
+        <button onclick="navigateMultiplicator('next')">Próximo</button>
+    </div>
+
+    <div id="status-message" class="status-message"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+    <script>
+        const socket = io("http://127.0.0.1:5000");
+        let historico = [];
+        const MAX_HISTORICO = 50000;
+        let currentMultiplicatorIndex = 0;
+        let isPaused = false;
+
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toISOString().replace('T', ' ').slice(0, 19);
+        }
+
+        function calcularDiferencaTempo(timestamp1, timestamp2) {
+            const diff = Math.abs(timestamp1 - timestamp2);
+            if (diff < 1000) return `${diff}ms`;
+            return `${(diff / 1000).toFixed(1)}s`;
+        }
+
+        function showStatusMessage(message, isError = false) {
+            const statusElement = document.getElementById('status-message');
+            statusElement.textContent = message;
+            statusElement.className = `status-message ${isError ? 'error' : 'success'}`;
+            statusElement.style.display = 'block';
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
+        }
+
+        socket.on('connect', () => {
+            console.log('Conectado ao servidor');
+            showStatusMessage('Conectado ao servidor');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Desconectado do servidor');
+            showStatusMessage('Desconectado do servidor', true);
+        });
+
+        socket.on('atualizacao', (data) => {
+            historico.push(data);
+            if (historico.length > MAX_HISTORICO) {
+                historico.shift();
+            }
+            if (!isPaused) {
+                updateDisplay(data);
+                currentMultiplicatorIndex = historico.length - 1;
+            }
+        });
+
+        function updateDisplay(data) {
+            document.getElementById('jogo').innerText = data.jogo;
+            document.getElementById('multiplicador').innerText = data.multiplicador;
+            document.getElementById('percentual').innerText = data.percentual + '%';
+            document.getElementById('media_movel').innerText = data.media_movel !== "---" ? data.media_movel : "---";
+            document.getElementById('zona').innerText = data.zona;
+            document.getElementById('rsi').innerText = data.rsi;
+            document.getElementById('maior_perda').innerText = data.maior_perda;
+            document.getElementById('maior_ganho').innerText = data.maior_ganho;
+            document.getElementById('timestamp').innerText = formatTimestamp(data.time);
+        }
+
+        function sendCommand(command) {
+            socket.emit('command', { command });
+
+            if (command === 'pause') {
+                isPaused = true;
+                showStatusMessage('Monitoramento pausado');
+            } else if (command === 'resume') {
+                isPaused = false;
+                showStatusMessage('Monitoramento retomado');
+            }
+        }
+
+        function navigateMultiplicator(direction) {
+            if (!isPaused) {
+                showStatusMessage('Pause o monitoramento para navegar pelos multiplicadores', true);
+                return;
+            }
+
+            const newIndex = direction === 'prev' ?
+                currentMultiplicatorIndex - 1 :
+                currentMultiplicatorIndex + 1;
+
+            if (newIndex >= 0 && newIndex < historico.length) {
+                currentMultiplicatorIndex = newIndex;
+                updateDisplay(historico[currentMultiplicatorIndex]);
+                showStatusMessage(`Navegando para ${direction === 'prev' ? 'registro anterior' : 'próximo registro'}`);
+            } else {
+                showStatusMessage(`Não há mais registros ${direction === 'prev' ? 'anteriores' : 'posteriores'}`, true);
+            }
+        }
+    </script>
+</body>
+</html>

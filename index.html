@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Área de Controle</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0a0f29 0%, #000000 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .chart-container {
+            width: 100%;
+            max-width: 1200px;
+            background: rgba(10, 15, 41, 0.8);
+            padding: 1.5rem;
+            border-radius: 15px;
+            border: 1px solid #9d00ff;
+            box-shadow: 0 0 20px rgba(157, 0, 255, 0.3),
+                        inset 0 0 15px rgba(157, 0, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            resize: both;
+            overflow: auto;
+        }
+
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 30px rgba(157, 0, 255, 0.4);
+        }
+
+        .chart {
+            height: 400px;
+            filter: drop-shadow(0 0 2px rgba(157, 0, 255, 0.5));
+        }
+
+        h2 {
+            color: #ffffff;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            text-shadow: 0 0 10px rgba(157, 0, 255, 0.5);
+        }
+
+        #controls {
+            width: 100%;
+            max-width: 1200px;
+            background: rgba(10, 15, 41, 0.9);
+            padding: 1rem;
+            border-radius: 15px;
+            border: 1px solid #9d00ff;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        #controls button {
+            font-size: 1rem;
+            font-family: 'Roboto', sans-serif;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 5px;
+            border: 2px solid #fff;
+            padding: 0.7rem 1.2rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(157, 0, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        #controls button:hover {
+            background: #9d00ff;
+            color: #fff;
+            box-shadow: 0 0 25px rgba(157, 0, 255, 0.5);
+            border-color: #9d00ff;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .chart-container {
+                padding: 1rem;
+            }
+
+            .chart {
+                height: 300px;
+            }
+
+            #controls button {
+                padding: 0.6rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 15px rgba(157, 0, 255, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(157, 0, 255, 0.5); }
+            100% { box-shadow: 0 0 15px rgba(157, 0, 255, 0.3); }
+        }
+
+        .chart-container {
+            animation: glow 3s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button onclick="sendCommand('pause')">Pausar</button>
+        <button onclick="sendCommand('resume')">Retomar</button>
+        <button onclick="sendCommand('accelerate')">Acelerar</button>
+        <button onclick="sendCommand('decelerate')">Desacelerar</button>
+        <button onclick="sendCommand('stop')">Parar</button>
+    </div>
+
+    <div class="chart-container" id="line-chart-container">
+        <h2>C.M.M</h2>
+        <div id="line-chart" class="chart"></div>
+    </div>
+
+    <div class="chart-container" id="rsi-chart-container">
+        <h2>Force</h2>
+        <div id="rsi-chart" class="chart"></div>
+    </div>
+
+    <script>
+        const socket = io.connect('http://127.0.0.1:5000');
+
+        socket.on('connect', () => {
+            console.log('Conectado ao backend.');
+            alert('Conexão estabelecida com o backend.');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Desconectado do backend.');
+            alert('Conexão perdida com o backend.');
+        });
+
+        socket.on('status', (data) => {
+            console.log(data.message);
+        });
+
+        const lineChart = LightweightCharts.createChart(document.getElementById('line-chart'), {
+            width: 800,
+            height: 400,
+            layout: {
+                background: {
+                    color: '#0a0f29',
+                    type: 'solid',
+                },
+                textColor: '#ffffff',
+            },
+            grid: {
+                vertLines: { color: 'rgba(157, 0, 255, 0.1)' },
+                horzLines: { color: 'rgba(157, 0, 255, 0.1)' },
+            },
+        });
+
+        const lineSeries = lineChart.addLineSeries({
+            color: '#32cd32',
+            lineWidth: 2,
+            priceLineVisible: false,
+            lineStyle: 0,
+            crosshairMarkerVisible: true,
+            crosshairMarkerRadius: 4,
+            crosshairMarkerBorderColor: '#32cd32',
+            crosshairMarkerBackgroundColor: '#32cd32',
+            lineType: 0,
+        });
+
+        const movingAverageSeries = lineChart.addLineSeries({
+            color: '#ffa500',
+            lineWidth: 3,
+            priceLineVisible: false,
+            lineStyle: 0,
+            crosshairMarkerVisible: true,
+            crosshairMarkerRadius: 4,
+            crosshairMarkerBorderColor: '#ffa500',
+            crosshairMarkerBackgroundColor: '#ffa500',
+            lineType: 0,
+        });
+
+        lineChart.applyOptions({
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: true,
+                borderColor: '#9d00ff',
+            },
+        });
+
+        const rsiChart = LightweightCharts.createChart(document.getElementById('rsi-chart'), {
+            width: 800,
+            height: 400,
+            layout: {
+                background: {
+                    color: '#0a0f29',
+                    type: 'solid',
+                },
+                textColor: '#ffffff',
+            },
+            grid: {
+                vertLines: { color: 'rgba(157, 0, 255, 0.1)' },
+                horzLines: { color: 'rgba(157, 0, 255, 0.1)' },
+            },
+        });
+
+        const rsiSeries = rsiChart.addLineSeries({
+            color: '#9d00ff',
+            lineWidth: 3,
+            priceLineVisible: false,
+            lineStyle: 0,
+            crosshairMarkerVisible: true,
+            crosshairMarkerRadius: 4,
+            crosshairMarkerBorderColor: '#9370db',
+            crosshairMarkerBackgroundColor: '#9370db',
+            lineType: 0,
+        });
+
+        rsiChart.applyOptions({
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: true,
+                borderColor: '#9d00ff',
+            },
+        });
+
+        rsiSeries.createPriceLine({
+            price: 65,
+            color: '#ff4500',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: 'Contorno - (65)',
+        });
+
+        rsiSeries.createPriceLine({
+            price: 50,
+            color: '#FFC4ED',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: 'Neutra (50)',
+        });
+
+        rsiSeries.createPriceLine({
+            price: 35,
+            color: '#32cd32',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: 'Contorno + (35)',
+        });
+
+        socket.on('atualizacao', (data) => {
+            const timestamp = Math.floor(data.time / 1000);
+
+            lineSeries.update({ time: timestamp, value: data.percentual });
+            if (data.media_movel !== '---') {
+                movingAverageSeries.update({ time: timestamp, value: data.media_movel });
+            }
+
+            rsiSeries.update({ time: timestamp, value: data.rsi });
+
+            const date = new Date(data.time);
+            const utcString = date.toISOString().replace('T', ' ').slice(0, 19);
+            console.log(`Timestamp atualizado: ${utcString}`);
+        });
+
+        function sendCommand(command) {
+            socket.emit('command', { command });
+        }
+
+        function resizeCharts() {
+            const containers = document.querySelectorAll('.chart-container');
+            containers.forEach(container => {
+                const width = container.clientWidth - 40;
+                const chart = container.querySelector('.chart');
+                const chartInstance = chart.id === 'line-chart' ? lineChart : rsiChart;
+                chartInstance.applyOptions({ width: width });
+            });
+        }
+
+        window.addEventListener('resize', resizeCharts);
+        resizeCharts();
+    </script>
+</body>
+</html>
